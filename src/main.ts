@@ -5,7 +5,9 @@ import {
 	Plugin,
 	TFile,
 	PluginSettingTab,
-	Setting
+	Setting,
+	RequestUrlParam,
+	requestUrl
 } from "obsidian";
 
 import { AudioPlayerRenderer } from "./audioPlayerRenderer";
@@ -91,6 +93,29 @@ export default class AudioPlayer extends Plugin {
 			}
 		});
 
+		this.addCommand({
+			id: "summarize-audio",
+			name: "总结当前音频",
+			callback: async () => {
+				// 获取当前活动文件
+				const activeFile = this.app.workspace.getActiveFile();
+				if (!activeFile) {
+					new Notice("没有打开的文件");
+					return;
+				}
+				
+				// 检查文件类型
+				const audioExtensions = ["mp3", "wav", "ogg", "flac", "mp4", "m4a", "webm"];
+				if (!audioExtensions.includes(activeFile.extension)) {
+					new Notice("当前文件不是支持的音频文件");
+					return;
+				}
+				
+				// 开始处理
+				await this.summarizeAudio(activeFile);
+			}
+		});
+
 		this.registerMarkdownCodeBlockProcessor(
 			"audio-player",
 			(
@@ -131,6 +156,7 @@ export default class AudioPlayer extends Plugin {
 							filepath: filepath,
 							ctx,
 							player,
+							plugin: this  // 传递插件实例给渲染器
 						})
 					);
 				};
@@ -227,6 +253,275 @@ export default class AudioPlayer extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	// 总结音频文件
+	async summarizeAudio(file: TFile): Promise<string> {
+		try {
+			// 显示处理中提示
+			new Notice(`开始处理音频文件: ${file.name}`);
+			
+			// 1. 先确保文件是支持的格式，如果是 webm 则先转换
+			let audioFilePath = file.path;
+			if (file.extension === "webm") {
+				const mp3Path = file.path.replace(/\.webm$/, ".mp3");
+				// 检查 mp3 文件是否已存在
+				const mp3Exists = await this.app.vault.adapter.exists(mp3Path);
+				
+				if (!mp3Exists) {
+					// 需要先转换
+					new Notice("需要先将 webm 转换为 mp3");
+					await this.convertWebmToMp3(file.path, mp3Path);
+				}
+				audioFilePath = mp3Path;
+			}
+			
+			// 2. 使用 whisper 转换为文本
+			const transcription = await this.transcribeAudio(audioFilePath);
+			if (!transcription) {
+				new Notice("转录音频失败");
+				return '';
+			}
+			
+			// 3. 调用 AI 接口进行总结
+			const summary = await this.summarizeText(transcription);
+			if (!summary) {
+				new Notice("总结失败");
+				return '';
+			}
+			
+			// 4. 保存结果到文件
+			const summaryPath = file.path.replace(/\.[^.]+$/, "-summary.md");
+			await this.saveToFile(summaryPath, summary);
+			
+			new Notice(`总结完成，已保存到 ${summaryPath}`);
+
+			// 5. 在 sourcePath 文件中插入 summaryPath 文件内容
+			return summary
+		} catch (error) {
+			console.error("总结音频时出错:", error);
+			new Notice(`总结失败: ${error.message || error}`);
+			return '';
+		}
+	}
+	
+	// 转换 webm 到 mp3
+	async convertWebmToMp3(webmPath: string, mp3Path: string): Promise<boolean> {
+		return new Promise((resolve, reject) => {
+			try {
+				// 使用 Node.js 的 child_process
+				const { exec } = require('child_process');
+				const path = require('path');
+				
+				// 获取文件的绝对路径
+				const vaultBasePath = (this.app.vault as any).adapter.basePath || '';
+				if (!vaultBasePath) {
+					throw new Error("无法获取 Vault 根目录路径");
+				}
+				
+				// 构建绝对路径
+				const absWebmPath = path.resolve(vaultBasePath, webmPath);
+				const absMp3Path = path.resolve(vaultBasePath, mp3Path);
+				
+				// 处理路径中的特殊字符
+				const escapePath = (path: string) => {
+					// 根据操作系统区分处理
+					if (process.platform === 'win32') {
+						// Windows 系统使用双引号并处理特殊字符
+						return `"${path.replace(/"/g, '\\"')}"`;
+					} else {
+						// Unix/Linux/Mac 系统使用单引号或转义空格
+						return `'${path.replace(/'/g, "'\\''")}'`;
+					}
+				};
+				
+				// 执行 ffmpeg 命令
+				const ffmpegCmd = `${this.settings.ffmpegPath} -i ${escapePath(absWebmPath)} -vn -ab 128k -ar 44100 -y ${escapePath(absMp3Path)}`;
+				console.log("执行命令:", ffmpegCmd);
+				
+				exec(ffmpegCmd, (error: any, stdout: string, stderr: string) => {
+					if (error) {
+						console.error(`执行出错: ${error}`);
+						reject(error);
+						return;
+					}
+					
+					// 转换成功
+					console.log("webm 已成功转换为 mp3");
+					resolve(true);
+				});
+			} catch (error) {
+				console.error("执行 ffmpeg 失败:", error);
+				reject(error);
+			}
+		});
+	}
+	
+	// 使用 whisper 转录音频
+	async transcribeAudio(audioPath: string): Promise<string> {
+		return new Promise((resolve, reject) => {
+			try {
+				const { exec } = require('child_process');
+				const path = require('path');
+				const fs = require('fs');
+				
+				// 获取文件的绝对路径
+				const vaultBasePath = (this.app.vault as any).adapter.basePath || '';
+				if (!vaultBasePath) {
+					throw new Error("无法获取 Vault 根目录路径");
+				}
+				
+				// 构建绝对路径
+				const absAudioPath = path.resolve(vaultBasePath, audioPath);
+				const outputPath = path.resolve(vaultBasePath, audioPath.replace(/\.[^.]+$/, "-transcription"));
+				const outputFormat = 'srt';
+				
+				// 构建 whisper 命令
+				let whisperCmd = `${this.settings.whisperCliPath} -l zh --output-${outputFormat} --output-file "${outputPath}"`;
+				
+				// 如果有设置模型路径，添加模型参数
+				if (this.settings.whisperModelPath) {
+					whisperCmd += ` --model "${this.settings.whisperModelPath}" `;
+				}
+
+				whisperCmd += ` -f "${absAudioPath}"`;
+				
+				new Notice("正在使用 whisper 转录音频...");
+				console.log("执行 whisper 命令:", whisperCmd);
+				
+				exec(whisperCmd, async (error: any, stdout: string, stderr: string) => {
+					if (error) {
+						console.error(`执行 whisper 出错: ${error}`);
+						reject(error);
+						return;
+					}
+					
+					// 读取生成的转录文件
+					const transcriptionFilePath = path.resolve(outputPath + "." + outputFormat);
+					
+					if (fs.existsSync(transcriptionFilePath)) {
+						const transcription = fs.readFileSync(transcriptionFilePath, 'utf8');
+						resolve(transcription);
+					} else {
+						reject(new Error("找不到转录文件"));
+					}
+				});
+			} catch (error) {
+				console.error("执行 whisper 失败:", error);
+				reject(error);
+			}
+		});
+	}
+	
+	// 调用 AI 接口总结文本
+	async summarizeText(text: string): Promise<string> {
+		try {
+			if (!this.settings.aiApiKey) {
+				throw new Error("未配置 API 密钥");
+			}
+			
+			// 分段处理文本（每次处理约 4000 字）
+			const segments = this.splitTextIntoSegments(text, 4000);
+			let summaries = [];
+			
+			for (let i = 0; i < segments.length; i++) {
+				new Notice(`正在总结第 ${i+1}/${segments.length} 部分...`);
+
+				console.log('summarize config', this.settings.aiEndpoint, this.settings.aiModel, this.settings.aiApiKey);
+				
+				// 构建请求参数
+				const requestParams: RequestUrlParam = {
+					url: this.settings.aiEndpoint,
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"Authorization": `Bearer ${this.settings.aiApiKey}`
+					},
+					body: JSON.stringify({
+						model: this.settings.aiModel,
+						messages: [
+							{
+								role: "system",
+								content: "你是一个专业的音频内容分析助手。请按照时间戳格式总结音频内容，格式为'hh:mm:ss --- [小节内容]'，时间戳只需要保留开始时间，每小节的标题按实际内容进行分段，每个时间戳一行，如果有内容，加上冒号跟在标题后面，不要换行，不要有空行。请尽量将同一主题的讨论内容放在一个章节，不要太细碎"
+							},
+							{
+								role: "user",
+								content: `${this.settings.summaryPrompt}\n\n${segments[i]}`
+							}
+						],
+						temperature: 0.3
+					})
+				};
+				
+				// 发送请求
+				const response = await requestUrl(requestParams);
+				const jsonResponse = response.json;
+				
+				if (jsonResponse.choices && jsonResponse.choices.length > 0) {
+					const summaryContent = jsonResponse.choices[0].message.content;
+					summaries.push(summaryContent);
+				} else {
+					throw new Error("API 响应格式不正确");
+				}
+			}
+			
+			// 合并所有总结
+			return summaries.join("\n");
+			
+		} catch (error) {
+			console.error("调用 AI 接口失败:", error);
+			throw error;
+		}
+	}
+	
+	// 将文本分割成适合处理的片段
+	splitTextIntoSegments(text: string, maxChars: number): string[] {
+		const segments = [];
+		let currentSegment = "";
+		
+		// 按行分割
+		const lines = text.split("\n");
+		
+		for (const line of lines) {
+			// 如果添加当前行会超过最大字符数，就开始新的片段
+			if (currentSegment.length + line.length > maxChars && currentSegment.length > 0) {
+				segments.push(currentSegment);
+				currentSegment = line;
+			} else {
+				if (currentSegment.length > 0) {
+					currentSegment += "\n" + line;
+				} else {
+					currentSegment = line;
+				}
+			}
+		}
+		
+		// 添加最后一个片段
+		if (currentSegment.length > 0) {
+			segments.push(currentSegment);
+		}
+		
+		return segments;
+	}
+	
+	// 保存结果到文件
+	async saveToFile(filePath: string, content: string): Promise<void> {
+		try {
+			// 检查文件是否存在
+			const exists = await this.app.vault.adapter.exists(filePath);
+			
+			if (exists) {
+				// 更新现有文件
+				const file = this.app.vault.getAbstractFileByPath(filePath) as TFile;
+				await this.app.vault.modify(file, content);
+			} else {
+				// 创建新文件
+				await this.app.vault.create(filePath, content);
+			}
+		} catch (error) {
+			console.error("保存文件失败:", error);
+			throw error;
+		}
 	}
 }
 

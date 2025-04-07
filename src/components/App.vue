@@ -10,7 +10,7 @@
         <div class="playpause seconds" @click="setPlayheadSecs(currentTime-5)" ref="min5">
           &lt;&lt;
         </div>
-        <div class="playpause seconds" @click="setPlayheadSecs(currentTime-5)" ref="min5">
+        <div class="playpause seconds" @click="summarizeAudio" ref="summarize" title="使用 AI 总结音频内容">
           AI
         </div>
       </div>
@@ -60,7 +60,7 @@
 </template>
 
 <script lang="ts">
-import { TFile, setIcon, MarkdownPostProcessorContext } from 'obsidian'
+import { TFile, setIcon, MarkdownPostProcessorContext, Notice } from 'obsidian'
 import { defineComponent, PropType } from 'vue';
 import { AudioComment } from '../types'
 import { secondsToString, secondsToNumber } from '../utils'
@@ -76,7 +76,8 @@ export default defineComponent({
     filepath: String,
     ctx: Object as PropType<MarkdownPostProcessorContext>,
     mdElement: Object as PropType<HTMLElement>,
-    audio: Object as PropType<HTMLAudioElement>
+    audio: Object as PropType<HTMLAudioElement>,
+    plugin: Object
   },
   data() {
     return {
@@ -279,6 +280,36 @@ export default defineComponent({
         return cmt;
       });
       return cmts;
+    },
+    // 总结音频内容
+    async summarizeAudio() {
+      try {
+        if (!this.plugin) {
+          new Notice('无法获取插件实例');
+          return;
+        }
+        
+        // 获取文件对象
+        const vault = (this.plugin as any).app.vault;
+        const file = vault.getAbstractFileByPath(this.filepath) as TFile;
+        
+        if (!file) {
+          new Notice('找不到当前播放的音频文件');
+          return;
+        }
+        
+        // 调用插件的总结方法
+        const summary = await (this.plugin as any).summarizeAudio(file);
+
+        const sectionInfo = this.getSectionInfo();
+        const lines = sectionInfo.text.split('\n') as string[];
+        lines.splice(sectionInfo.lineEnd, 0, summary);
+        window.app.vault.adapter.write(this.ctx.sourcePath, lines.join('\n'))
+        
+      } catch (error) {
+        console.error('总结音频失败:', error);
+        new Notice(`总结音频失败: ${error.message || error}`);
+      }
     },
   },
   created() { 

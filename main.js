@@ -6587,7 +6587,8 @@ var App_default = defineComponent({
     filepath: String,
     ctx: Object,
     mdElement: Object,
-    audio: Object
+    audio: Object,
+    plugin: Object
   },
   data() {
     return {
@@ -6789,6 +6790,28 @@ var App_default = defineComponent({
         return cmt;
       });
       return cmts;
+    },
+    async summarizeAudio() {
+      try {
+        if (!this.plugin) {
+          new import_obsidian.Notice("\u65E0\u6CD5\u83B7\u53D6\u63D2\u4EF6\u5B9E\u4F8B");
+          return;
+        }
+        const vault = this.plugin.app.vault;
+        const file = vault.getAbstractFileByPath(this.filepath);
+        if (!file) {
+          new import_obsidian.Notice("\u627E\u4E0D\u5230\u5F53\u524D\u64AD\u653E\u7684\u97F3\u9891\u6587\u4EF6");
+          return;
+        }
+        const summary = await this.plugin.summarizeAudio(file);
+        const sectionInfo = this.getSectionInfo();
+        const lines = sectionInfo.text.split("\n");
+        lines.splice(sectionInfo.lineEnd, 0, summary);
+        window.app.vault.adapter.write(this.ctx.sourcePath, lines.join("\n"));
+      } catch (error) {
+        console.error("\u603B\u7ED3\u97F3\u9891\u5931\u8D25:", error);
+        new import_obsidian.Notice(`\u603B\u7ED3\u97F3\u9891\u5931\u8D25: ${error.message || error}`);
+      }
     }
   },
   created() {
@@ -6876,8 +6899,9 @@ function render2(_ctx, _cache, $props, $setup, $data, $options) {
         }, " << ", 512),
         createBaseVNode("div", {
           class: "playpause seconds",
-          onClick: _cache[3] || (_cache[3] = ($event) => _ctx.setPlayheadSecs(_ctx.currentTime - 5)),
-          ref: "min5"
+          onClick: _cache[3] || (_cache[3] = (...args) => _ctx.summarizeAudio && _ctx.summarizeAudio(...args)),
+          ref: "summarize",
+          title: "\u4F7F\u7528 AI \u603B\u7ED3\u97F3\u9891\u5185\u5BB9"
         }, " AI ", 512)
       ], 512), [
         [vShow, !_ctx.smallSize]
@@ -6973,7 +6997,8 @@ var AudioPlayerRenderer = class extends import_obsidian2.MarkdownRenderChild {
       filepath: this.options.filepath,
       ctx: this.options.ctx,
       mdElement: containerEl,
-      audio: this.options.player
+      audio: this.options.player,
+      plugin: this.options.plugin
     });
   }
   onload() {
@@ -7047,6 +7072,23 @@ var AudioPlayer = class extends import_obsidian3.Plugin {
           player.currentTime -= 5;
       }
     });
+    this.addCommand({
+      id: "summarize-audio",
+      name: "\u603B\u7ED3\u5F53\u524D\u97F3\u9891",
+      callback: async () => {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (!activeFile) {
+          new import_obsidian3.Notice("\u6CA1\u6709\u6253\u5F00\u7684\u6587\u4EF6");
+          return;
+        }
+        const audioExtensions = ["mp3", "wav", "ogg", "flac", "mp4", "m4a", "webm"];
+        if (!audioExtensions.includes(activeFile.extension)) {
+          new import_obsidian3.Notice("\u5F53\u524D\u6587\u4EF6\u4E0D\u662F\u652F\u6301\u7684\u97F3\u9891\u6587\u4EF6");
+          return;
+        }
+        await this.summarizeAudio(activeFile);
+      }
+    });
     this.registerMarkdownCodeBlockProcessor("audio-player", (source, el, ctx) => {
       var _a2;
       const re = /\[\[(.+)\]\]/g;
@@ -7071,7 +7113,8 @@ var AudioPlayer = class extends import_obsidian3.Plugin {
         ctx.addChild(new AudioPlayerRenderer(el, {
           filepath,
           ctx,
-          player
+          player,
+          plugin: this
         }));
       };
       if (link.extension === "webm") {
@@ -7136,6 +7179,198 @@ var AudioPlayer = class extends import_obsidian3.Plugin {
   }
   async saveSettings() {
     await this.saveData(this.settings);
+  }
+  async summarizeAudio(file) {
+    try {
+      new import_obsidian3.Notice(`\u5F00\u59CB\u5904\u7406\u97F3\u9891\u6587\u4EF6: ${file.name}`);
+      let audioFilePath = file.path;
+      if (file.extension === "webm") {
+        const mp3Path = file.path.replace(/\.webm$/, ".mp3");
+        const mp3Exists = await this.app.vault.adapter.exists(mp3Path);
+        if (!mp3Exists) {
+          new import_obsidian3.Notice("\u9700\u8981\u5148\u5C06 webm \u8F6C\u6362\u4E3A mp3");
+          await this.convertWebmToMp3(file.path, mp3Path);
+        }
+        audioFilePath = mp3Path;
+      }
+      const transcription = await this.transcribeAudio(audioFilePath);
+      if (!transcription) {
+        new import_obsidian3.Notice("\u8F6C\u5F55\u97F3\u9891\u5931\u8D25");
+        return "";
+      }
+      const summary = await this.summarizeText(transcription);
+      if (!summary) {
+        new import_obsidian3.Notice("\u603B\u7ED3\u5931\u8D25");
+        return "";
+      }
+      const summaryPath = file.path.replace(/\.[^.]+$/, "-summary.md");
+      await this.saveToFile(summaryPath, summary);
+      new import_obsidian3.Notice(`\u603B\u7ED3\u5B8C\u6210\uFF0C\u5DF2\u4FDD\u5B58\u5230 ${summaryPath}`);
+      return summary;
+    } catch (error) {
+      console.error("\u603B\u7ED3\u97F3\u9891\u65F6\u51FA\u9519:", error);
+      new import_obsidian3.Notice(`\u603B\u7ED3\u5931\u8D25: ${error.message || error}`);
+      return "";
+    }
+  }
+  async convertWebmToMp3(webmPath, mp3Path) {
+    return new Promise((resolve2, reject) => {
+      try {
+        const { exec } = require("child_process");
+        const path = require("path");
+        const vaultBasePath = this.app.vault.adapter.basePath || "";
+        if (!vaultBasePath) {
+          throw new Error("\u65E0\u6CD5\u83B7\u53D6 Vault \u6839\u76EE\u5F55\u8DEF\u5F84");
+        }
+        const absWebmPath = path.resolve(vaultBasePath, webmPath);
+        const absMp3Path = path.resolve(vaultBasePath, mp3Path);
+        const escapePath = (path2) => {
+          if (process.platform === "win32") {
+            return `"${path2.replace(/"/g, '\\"')}"`;
+          } else {
+            return `'${path2.replace(/'/g, "'\\''")}'`;
+          }
+        };
+        const ffmpegCmd = `${this.settings.ffmpegPath} -i ${escapePath(absWebmPath)} -vn -ab 128k -ar 44100 -y ${escapePath(absMp3Path)}`;
+        console.log("\u6267\u884C\u547D\u4EE4:", ffmpegCmd);
+        exec(ffmpegCmd, (error, stdout, stderr) => {
+          if (error) {
+            console.error(`\u6267\u884C\u51FA\u9519: ${error}`);
+            reject(error);
+            return;
+          }
+          console.log("webm \u5DF2\u6210\u529F\u8F6C\u6362\u4E3A mp3");
+          resolve2(true);
+        });
+      } catch (error) {
+        console.error("\u6267\u884C ffmpeg \u5931\u8D25:", error);
+        reject(error);
+      }
+    });
+  }
+  async transcribeAudio(audioPath) {
+    return new Promise((resolve2, reject) => {
+      try {
+        const { exec } = require("child_process");
+        const path = require("path");
+        const fs = require("fs");
+        const vaultBasePath = this.app.vault.adapter.basePath || "";
+        if (!vaultBasePath) {
+          throw new Error("\u65E0\u6CD5\u83B7\u53D6 Vault \u6839\u76EE\u5F55\u8DEF\u5F84");
+        }
+        const absAudioPath = path.resolve(vaultBasePath, audioPath);
+        const outputPath = path.resolve(vaultBasePath, audioPath.replace(/\.[^.]+$/, "-transcription"));
+        const outputFormat = "srt";
+        let whisperCmd = `${this.settings.whisperCliPath} -l zh --output-${outputFormat} --output-file "${outputPath}"`;
+        if (this.settings.whisperModelPath) {
+          whisperCmd += ` --model "${this.settings.whisperModelPath}" `;
+        }
+        whisperCmd += ` -f "${absAudioPath}"`;
+        new import_obsidian3.Notice("\u6B63\u5728\u4F7F\u7528 whisper \u8F6C\u5F55\u97F3\u9891...");
+        console.log("\u6267\u884C whisper \u547D\u4EE4:", whisperCmd);
+        exec(whisperCmd, async (error, stdout, stderr) => {
+          if (error) {
+            console.error(`\u6267\u884C whisper \u51FA\u9519: ${error}`);
+            reject(error);
+            return;
+          }
+          const transcriptionFilePath = path.resolve(outputPath + "." + outputFormat);
+          if (fs.existsSync(transcriptionFilePath)) {
+            const transcription = fs.readFileSync(transcriptionFilePath, "utf8");
+            resolve2(transcription);
+          } else {
+            reject(new Error("\u627E\u4E0D\u5230\u8F6C\u5F55\u6587\u4EF6"));
+          }
+        });
+      } catch (error) {
+        console.error("\u6267\u884C whisper \u5931\u8D25:", error);
+        reject(error);
+      }
+    });
+  }
+  async summarizeText(text) {
+    try {
+      if (!this.settings.aiApiKey) {
+        throw new Error("\u672A\u914D\u7F6E API \u5BC6\u94A5");
+      }
+      const segments = this.splitTextIntoSegments(text, 4e3);
+      let summaries = [];
+      for (let i = 0; i < segments.length; i++) {
+        new import_obsidian3.Notice(`\u6B63\u5728\u603B\u7ED3\u7B2C ${i + 1}/${segments.length} \u90E8\u5206...`);
+        console.log("summarize config", this.settings.aiEndpoint, this.settings.aiModel, this.settings.aiApiKey);
+        const requestParams = {
+          url: this.settings.aiEndpoint,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${this.settings.aiApiKey}`
+          },
+          body: JSON.stringify({
+            model: this.settings.aiModel,
+            messages: [
+              {
+                role: "system",
+                content: "\u4F60\u662F\u4E00\u4E2A\u4E13\u4E1A\u7684\u97F3\u9891\u5185\u5BB9\u5206\u6790\u52A9\u624B\u3002\u8BF7\u6309\u7167\u65F6\u95F4\u6233\u683C\u5F0F\u603B\u7ED3\u97F3\u9891\u5185\u5BB9\uFF0C\u683C\u5F0F\u4E3A'hh:mm:ss --- [\u5C0F\u8282\u5185\u5BB9]'\uFF0C\u65F6\u95F4\u6233\u53EA\u9700\u8981\u4FDD\u7559\u5F00\u59CB\u65F6\u95F4\uFF0C\u6BCF\u5C0F\u8282\u7684\u6807\u9898\u6309\u5B9E\u9645\u5185\u5BB9\u8FDB\u884C\u5206\u6BB5\uFF0C\u6BCF\u4E2A\u65F6\u95F4\u6233\u4E00\u884C\uFF0C\u5982\u679C\u6709\u5185\u5BB9\uFF0C\u52A0\u4E0A\u5192\u53F7\u8DDF\u5728\u6807\u9898\u540E\u9762\uFF0C\u4E0D\u8981\u6362\u884C\uFF0C\u4E0D\u8981\u6709\u7A7A\u884C\u3002\u8BF7\u5C3D\u91CF\u5C06\u540C\u4E00\u4E3B\u9898\u7684\u8BA8\u8BBA\u5185\u5BB9\u653E\u5728\u4E00\u4E2A\u7AE0\u8282\uFF0C\u4E0D\u8981\u592A\u7EC6\u788E"
+              },
+              {
+                role: "user",
+                content: `${this.settings.summaryPrompt}
+
+${segments[i]}`
+              }
+            ],
+            temperature: 0.3
+          })
+        };
+        const response = await (0, import_obsidian3.requestUrl)(requestParams);
+        const jsonResponse = response.json;
+        if (jsonResponse.choices && jsonResponse.choices.length > 0) {
+          const summaryContent = jsonResponse.choices[0].message.content;
+          summaries.push(summaryContent);
+        } else {
+          throw new Error("API \u54CD\u5E94\u683C\u5F0F\u4E0D\u6B63\u786E");
+        }
+      }
+      return summaries.join("\n");
+    } catch (error) {
+      console.error("\u8C03\u7528 AI \u63A5\u53E3\u5931\u8D25:", error);
+      throw error;
+    }
+  }
+  splitTextIntoSegments(text, maxChars) {
+    const segments = [];
+    let currentSegment = "";
+    const lines = text.split("\n");
+    for (const line of lines) {
+      if (currentSegment.length + line.length > maxChars && currentSegment.length > 0) {
+        segments.push(currentSegment);
+        currentSegment = line;
+      } else {
+        if (currentSegment.length > 0) {
+          currentSegment += "\n" + line;
+        } else {
+          currentSegment = line;
+        }
+      }
+    }
+    if (currentSegment.length > 0) {
+      segments.push(currentSegment);
+    }
+    return segments;
+  }
+  async saveToFile(filePath, content) {
+    try {
+      const exists = await this.app.vault.adapter.exists(filePath);
+      if (exists) {
+        const file = this.app.vault.getAbstractFileByPath(filePath);
+        await this.app.vault.modify(file, content);
+      } else {
+        await this.app.vault.create(filePath, content);
+      }
+    } catch (error) {
+      console.error("\u4FDD\u5B58\u6587\u4EF6\u5931\u8D25:", error);
+      throw error;
+    }
   }
 };
 var AudioPlayerSettingTab = class extends import_obsidian3.PluginSettingTab {
