@@ -5,10 +5,13 @@
         <div class="playpause" @click="togglePlay" ref="playpause">
         </div>
         <div class="playpause seconds" @click="setPlayheadSecs(currentTime+5)" ref="add5">
-          +5s
+          &gt;&gt;
         </div>
         <div class="playpause seconds" @click="setPlayheadSecs(currentTime-5)" ref="min5">
-          -5s
+          &lt;&lt;
+        </div>
+        <div class="playpause seconds" @click="setPlayheadSecs(currentTime-5)" ref="min5">
+          AI
         </div>
       </div>
       <div class="vert wide">

@@ -27,10 +27,10 @@ __export(main_exports, {
   default: () => AudioPlayer
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian4 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 
 // src/audioPlayerRenderer.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian2 = require("obsidian");
 
 // node_modules/@vue/shared/dist/shared.esm-bundler.js
 function makeMap(str, expectsLowerCase) {
@@ -6525,8 +6525,8 @@ if (true) {
   initDev();
 }
 
-// sfc-script:/mnt/d/the-book-of-knowledge/.obsidian/plugins/obsidian-audio-player/src/components/App.vue?type=script
-var import_obsidian2 = require("obsidian");
+// sfc-script:/Users/admin/Documents/Obsidian/Longbridge/.obsidian/plugins/obsidian-audio-player/src/components/App.vue?type=script
+var import_obsidian = require("obsidian");
 
 // src/utils.ts
 function secondsToString(num) {
@@ -6541,8 +6541,7 @@ function secondsToNumber(stmp) {
   return nums[2] + nums[1] * 60 + nums[0] * 3600;
 }
 
-// sfc-script:/mnt/d/the-book-of-knowledge/.obsidian/plugins/obsidian-audio-player/src/components/AudioComment.vue?type=script
-var import_obsidian = require("obsidian");
+// sfc-script:/Users/admin/Documents/Obsidian/Longbridge/.obsidian/plugins/obsidian-audio-player/src/components/AudioComment.vue?type=script
 var AudioComment_default = defineComponent({
   name: "AudioComment",
   props: {
@@ -6556,29 +6555,20 @@ var AudioComment_default = defineComponent({
     emitRemove() {
       this.$emit("remove", this.cmt.index);
     }
-  },
-  mounted() {
-    this.button = this.$refs.remove;
-    (0, import_obsidian.setIcon)(this.button, "cross");
   }
 });
 
-// sfc-template:/mnt/d/the-book-of-knowledge/.obsidian/plugins/obsidian-audio-player/src/components/AudioComment.vue?type=template
-var _hoisted_1 = { class: "comment" };
+// sfc-template:/Users/admin/Documents/Obsidian/Longbridge/.obsidian/plugins/obsidian-audio-player/src/components/AudioComment.vue?type=template
+var _hoisted_1 = { class: "timestamp" };
 var _hoisted_2 = { class: "content" };
 function render(_ctx, _cache, $props, $setup, $data, $options) {
   var _a2, _b;
-  return openBlock(), createElementBlock("div", _hoisted_1, [
-    createBaseVNode("span", {
-      class: "timestamp",
-      onClick: _cache[0] || (_cache[0] = (...args) => _ctx.emitMovePlayhead && _ctx.emitMovePlayhead(...args))
-    }, toDisplayString((_a2 = _ctx.cmt) == null ? void 0 : _a2.timeString), 1),
-    createBaseVNode("span", _hoisted_2, toDisplayString((_b = _ctx.cmt) == null ? void 0 : _b.content), 1),
-    createBaseVNode("div", {
-      onClick: _cache[1] || (_cache[1] = (...args) => _ctx.emitRemove && _ctx.emitRemove(...args)),
-      class: "delete-comment",
-      ref: "remove"
-    }, null, 512)
+  return openBlock(), createElementBlock("div", {
+    class: "comment",
+    onClick: _cache[0] || (_cache[0] = (...args) => _ctx.emitMovePlayhead && _ctx.emitMovePlayhead(...args))
+  }, [
+    createBaseVNode("span", _hoisted_1, toDisplayString((_a2 = _ctx.cmt) == null ? void 0 : _a2.timeString), 1),
+    createBaseVNode("span", _hoisted_2, toDisplayString((_b = _ctx.cmt) == null ? void 0 : _b.content), 1)
   ]);
 }
 
@@ -6587,7 +6577,7 @@ AudioComment_default.render = render;
 AudioComment_default.__file = "src/components/AudioComment.vue";
 var AudioComment_default2 = AudioComment_default;
 
-// sfc-script:/mnt/d/the-book-of-knowledge/.obsidian/plugins/obsidian-audio-player/src/components/App.vue?type=script
+// sfc-script:/Users/admin/Documents/Obsidian/Longbridge/.obsidian/plugins/obsidian-audio-player/src/components/App.vue?type=script
 var App_default = defineComponent({
   name: "App",
   components: {
@@ -6615,6 +6605,7 @@ var App_default = defineComponent({
       showInput: false,
       newComment: "",
       comments: [],
+      activeComment: null,
       ro: ResizeObserver,
       smallSize: false
     };
@@ -6640,12 +6631,15 @@ var App_default = defineComponent({
     getParentWidth() {
       return this.mdElement.clientWidth;
     },
+    isCurrent() {
+      return this.audio.src === this.srcPath;
+    },
     onResize() {
       this.smallSize = this.$el.clientWidth < 300;
     },
     async loadFile() {
       const file = window.app.vault.getAbstractFileByPath(this.filepath);
-      if (file && file instanceof import_obsidian2.TFile) {
+      if (file && file instanceof import_obsidian.TFile) {
         if (!this.loadCache())
           this.processAudio(file.path);
         this.srcPath = window.app.vault.getResourcePath(file);
@@ -6686,17 +6680,20 @@ var App_default = defineComponent({
         this.saveCache();
       });
     },
+    showCommentInput() {
+      this.showInput = true;
+      setTimeout(() => {
+        const input = this.$refs.commentInput;
+        input.focus();
+      });
+    },
     barMouseDownHandler(i) {
       this.clickCount += 1;
       setTimeout(() => {
         this.clickCount = 0;
       }, 200);
       if (this.clickCount >= 2) {
-        this.showInput = true;
-        setTimeout(() => {
-          const input = this.$refs.commentInput;
-          input.focus();
-        });
+        this.showCommentInput();
       } else {
         let time = i / this.nSamples * this.duration;
         this.setPlayheadSecs(time);
@@ -6704,12 +6701,14 @@ var App_default = defineComponent({
     },
     setPlayheadSecs(time) {
       this.currentTime = time;
-      if (this.audio.src === this.srcPath) {
+      if (!this.isCurrent())
+        this.togglePlay();
+      if (this.isCurrent()) {
         this.audio.currentTime = time;
       }
     },
     togglePlay() {
-      if (!(this.audio.src === this.srcPath)) {
+      if (!this.isCurrent()) {
         this.audio.src = this.srcPath;
       }
       if (this.audio.paused) {
@@ -6726,11 +6725,13 @@ var App_default = defineComponent({
       }
       this.audio.addEventListener("timeupdate", this.timeUpdateHandler);
       (_a2 = this.audio) == null ? void 0 : _a2.play();
+      this.playing = true;
       this.setBtnIcon("pause");
     },
     pause() {
       var _a2;
       (_a2 = this.audio) == null ? void 0 : _a2.pause();
+      this.playing = false;
       this.setBtnIcon("play");
     },
     globalPause() {
@@ -6739,12 +6740,23 @@ var App_default = defineComponent({
     },
     timeUpdateHandler() {
       var _a2;
-      if (this.audio.src === this.srcPath)
+      if (this.isCurrent()) {
         this.currentTime = (_a2 = this.audio) == null ? void 0 : _a2.currentTime;
+        const nextCommencts = this.commentsSorted.filter((x) => {
+          var _a3;
+          return ((_a3 = this.audio) == null ? void 0 : _a3.currentTime) >= x.timeNumber;
+        });
+        if (nextCommencts.length == 1) {
+          this.activeComment = nextCommencts[0];
+        }
+        if (nextCommencts.length > 1) {
+          this.activeComment = nextCommencts[nextCommencts.length - 1];
+        }
+      }
     },
     setBtnIcon(icon) {
-      (0, import_obsidian2.setIcon)(this.button, icon);
-      (0, import_obsidian2.setIcon)(this.button1, icon);
+      (0, import_obsidian.setIcon)(this.button, icon);
+      (0, import_obsidian.setIcon)(this.button1, icon);
     },
     addComment() {
       if (this.newComment.length == 0)
@@ -6790,10 +6802,12 @@ var App_default = defineComponent({
       this.setBtnIcon("play");
     });
     document.addEventListener("allresume", () => {
-      console.log("test");
-      if (this.audio.src === this.srcPath) {
+      if (this.isCurrent())
         this.setBtnIcon("pause");
-      }
+    });
+    document.addEventListener("addcomment", () => {
+      if (this.isCurrent())
+        this.showCommentInput();
     });
     this.audio.addEventListener("ended", () => {
       if (this.audio.src === this.srcPath)
@@ -6818,7 +6832,7 @@ var App_default = defineComponent({
   }
 });
 
-// sfc-template:/mnt/d/the-book-of-knowledge/.obsidian/plugins/obsidian-audio-player/src/components/App.vue?type=template
+// sfc-template:/Users/admin/Documents/Obsidian/Longbridge/.obsidian/plugins/obsidian-audio-player/src/components/App.vue?type=template
 var _hoisted_12 = {
   class: "audio-player-ui",
   tabindex: "0"
@@ -6854,12 +6868,17 @@ function render2(_ctx, _cache, $props, $setup, $data, $options) {
           class: "playpause seconds",
           onClick: _cache[1] || (_cache[1] = ($event) => _ctx.setPlayheadSecs(_ctx.currentTime + 5)),
           ref: "add5"
-        }, " +5s ", 512),
+        }, " >> ", 512),
         createBaseVNode("div", {
           class: "playpause seconds",
           onClick: _cache[2] || (_cache[2] = ($event) => _ctx.setPlayheadSecs(_ctx.currentTime - 5)),
           ref: "min5"
-        }, " -5s ", 512)
+        }, " << ", 512),
+        createBaseVNode("div", {
+          class: "playpause seconds",
+          onClick: _cache[3] || (_cache[3] = ($event) => _ctx.setPlayheadSecs(_ctx.currentTime - 5)),
+          ref: "min5"
+        }, " AI ", 512)
       ], 512), [
         [vShow, !_ctx.smallSize]
       ]),
@@ -6885,17 +6904,17 @@ function render2(_ctx, _cache, $props, $setup, $data, $options) {
     withDirectives(createBaseVNode("div", _hoisted_10, [
       createBaseVNode("div", {
         class: "playpause seconds",
-        onClick: _cache[3] || (_cache[3] = ($event) => _ctx.setPlayheadSecs(_ctx.currentTime - 5)),
+        onClick: _cache[4] || (_cache[4] = ($event) => _ctx.setPlayheadSecs(_ctx.currentTime - 5)),
         ref: "min5"
       }, " -5s ", 512),
       createBaseVNode("div", {
         class: "playpause play-button",
-        onClick: _cache[4] || (_cache[4] = (...args) => _ctx.togglePlay && _ctx.togglePlay(...args)),
+        onClick: _cache[5] || (_cache[5] = (...args) => _ctx.togglePlay && _ctx.togglePlay(...args)),
         ref: "playpause1"
       }, null, 512),
       createBaseVNode("div", {
         class: "playpause seconds",
-        onClick: _cache[5] || (_cache[5] = ($event) => _ctx.setPlayheadSecs(_ctx.currentTime + 5)),
+        onClick: _cache[6] || (_cache[6] = ($event) => _ctx.setPlayheadSecs(_ctx.currentTime + 5)),
         ref: "add5"
       }, " +5s ", 512)
     ], 512), [
@@ -6903,13 +6922,13 @@ function render2(_ctx, _cache, $props, $setup, $data, $options) {
     ]),
     _ctx.showInput ? (openBlock(), createElementBlock("div", _hoisted_11, [
       withDirectives(createBaseVNode("input", {
-        "onUpdate:modelValue": _cache[6] || (_cache[6] = ($event) => _ctx.newComment = $event),
+        "onUpdate:modelValue": _cache[7] || (_cache[7] = ($event) => _ctx.newComment = $event),
         onKeydown: [
-          _cache[7] || (_cache[7] = withKeys(($event) => {
+          _cache[8] || (_cache[8] = withKeys(($event) => {
             _ctx.showInput = false;
             _ctx.newComment = "";
           }, ["escape"])),
-          _cache[8] || (_cache[8] = withKeys((...args) => _ctx.addComment && _ctx.addComment(...args), ["enter"]))
+          _cache[9] || (_cache[9] = withKeys((...args) => _ctx.addComment && _ctx.addComment(...args), ["enter"]))
         ],
         type: "text",
         ref: "commentInput"
@@ -6917,10 +6936,10 @@ function render2(_ctx, _cache, $props, $setup, $data, $options) {
         [vModelText, _ctx.newComment]
       ]),
       createBaseVNode("button", {
-        onClick: _cache[9] || (_cache[9] = (...args) => _ctx.addComment && _ctx.addComment(...args))
+        onClick: _cache[10] || (_cache[10] = (...args) => _ctx.addComment && _ctx.addComment(...args))
       }, "Add"),
       createBaseVNode("button", {
-        onClick: _cache[10] || (_cache[10] = ($event) => {
+        onClick: _cache[11] || (_cache[11] = ($event) => {
           _ctx.showInput = false;
           _ctx.newComment = "";
         })
@@ -6929,11 +6948,12 @@ function render2(_ctx, _cache, $props, $setup, $data, $options) {
     createBaseVNode("div", _hoisted_122, [
       (openBlock(true), createElementBlock(Fragment, null, renderList(_ctx.commentsSorted, (cmt) => {
         return openBlock(), createBlock(_component_AudioCommentVue, {
+          class: normalizeClass({ "active-comment": cmt == _ctx.activeComment }),
           onMovePlayhead: _ctx.setPlayheadSecs,
           onRemove: _ctx.removeComment,
           cmt,
           key: cmt.timeString
-        }, null, 8, ["onMovePlayhead", "onRemove", "cmt"]);
+        }, null, 8, ["class", "onMovePlayhead", "onRemove", "cmt"]);
       }), 128))
     ])
   ]);
@@ -6945,7 +6965,7 @@ App_default.__file = "src/components/App.vue";
 var App_default2 = App_default;
 
 // src/audioPlayerRenderer.ts
-var AudioPlayerRenderer = class extends import_obsidian3.MarkdownRenderChild {
+var AudioPlayerRenderer = class extends import_obsidian2.MarkdownRenderChild {
   constructor(containerEl, options) {
     super(containerEl);
     this.options = options;
@@ -6965,8 +6985,19 @@ var AudioPlayerRenderer = class extends import_obsidian3.MarkdownRenderChild {
 };
 
 // src/main.ts
-var AudioPlayer = class extends import_obsidian4.Plugin {
+var DEFAULT_SETTINGS = {
+  ffmpegPath: "ffmpeg",
+  whisperCliPath: "whisper",
+  whisperModelPath: "",
+  summaryPrompt: "\u8BF7\u603B\u7ED3\u4EE5\u4E0B\u97F3\u9891\u8F6C\u5F55\u7684\u5185\u5BB9\uFF0C\u63D0\u53D6\u5173\u952E\u4FE1\u606F\u548C\u8981\u70B9\uFF1A",
+  aiEndpoint: "https://api.openai.com/v1/chat/completions",
+  aiModel: "gpt-3.5-turbo",
+  aiApiKey: ""
+};
+var AudioPlayer = class extends import_obsidian3.Plugin {
   async onload() {
+    await this.loadSettings();
+    this.addSettingTab(new AudioPlayerSettingTab(this.app, this));
     const player = document.createElement("audio");
     player.volume = 0.5;
     const body = document.getElementsByTagName("body")[0];
@@ -6975,7 +7006,7 @@ var AudioPlayer = class extends import_obsidian4.Plugin {
       id: "pause-audio",
       name: "Pause Audio",
       callback: () => {
-        new import_obsidian4.Notice("Audio paused");
+        new import_obsidian3.Notice("Audio paused");
         const ev = new Event("allpause");
         document.dispatchEvent(ev);
         player.pause();
@@ -6985,11 +7016,35 @@ var AudioPlayer = class extends import_obsidian4.Plugin {
       id: "resume-audio",
       name: "Resume Audio",
       callback: () => {
-        new import_obsidian4.Notice("Audio resumed");
+        new import_obsidian3.Notice("Audio resumed");
         const ev = new Event("allresume");
         document.dispatchEvent(ev);
         if (player.src)
           player.play();
+      }
+    });
+    this.addCommand({
+      id: "add-audio-comment",
+      name: "Add bookmark",
+      callback: () => {
+        const ev = new Event("addcomment");
+        document.dispatchEvent(ev);
+      }
+    });
+    this.addCommand({
+      id: "audio-forward-5s",
+      name: "+5 sec",
+      callback: () => {
+        if (player.src)
+          player.currentTime += 5;
+      }
+    });
+    this.addCommand({
+      id: "audio-back-5s",
+      name: "-5 sec",
+      callback: () => {
+        if (player.src)
+          player.currentTime -= 5;
       }
     });
     this.registerMarkdownCodeBlockProcessor("audio-player", (source, el, ctx) => {
@@ -7002,18 +7057,148 @@ var AudioPlayer = class extends import_obsidian4.Plugin {
         "mp3",
         "wav",
         "ogg",
-        "flac"
+        "flac",
+        "mp4",
+        "m4a",
+        "webm"
       ];
-      const link = this.app.metadataCache.getFirstLinkpathDest((0, import_obsidian4.getLinkpath)(filename), filename);
+      const link = this.app.metadataCache.getFirstLinkpathDest((0, import_obsidian3.getLinkpath)(filename), filename);
       if (!link || !allowedExtensions.includes(link.extension))
         return;
-      const container = el.createDiv();
-      container.classList.add("base-container");
-      ctx.addChild(new AudioPlayerRenderer(el, {
-        filepath: link.path,
-        ctx,
-        player
-      }));
+      const createAudioPlayer = (filepath) => {
+        const container = el.createDiv();
+        container.classList.add("base-container");
+        ctx.addChild(new AudioPlayerRenderer(el, {
+          filepath,
+          ctx,
+          player
+        }));
+      };
+      if (link.extension === "webm") {
+        try {
+          const webmFile = link.path;
+          const mp3Path = link.path.replace(/\.webm$/, ".mp3");
+          const containerEl = el.createDiv();
+          this.app.vault.adapter.exists(mp3Path).then(async (exists) => {
+            if (exists) {
+              createAudioPlayer(mp3Path);
+            } else {
+              new import_obsidian3.Notice("\u6B63\u5728\u8F6C\u6362 webm \u6587\u4EF6...");
+              const loadingEl = containerEl.createDiv();
+              loadingEl.setText("\u6B63\u5728\u4F7F\u7528 ffmpeg \u8F6C\u6362\u97F3\u9891\u6587\u4EF6\uFF0C\u8BF7\u7A0D\u5019...");
+              try {
+                const { exec } = require("child_process");
+                const path = require("path");
+                const vaultBasePath = this.app.vault.adapter.basePath || "";
+                if (!vaultBasePath) {
+                  throw new Error("\u65E0\u6CD5\u83B7\u53D6 Vault \u6839\u76EE\u5F55\u8DEF\u5F84");
+                }
+                const absWebmPath = path.resolve(vaultBasePath, webmFile);
+                const absMp3Path = path.resolve(vaultBasePath, mp3Path);
+                const escapePath = (path2) => {
+                  if (process.platform === "win32") {
+                    return `"${path2.replace(/"/g, '\\"')}"`;
+                  } else {
+                    return `'${path2.replace(/'/g, "'\\''")}'`;
+                  }
+                };
+                const ffmpegCmd = `${this.settings.ffmpegPath} -i ${escapePath(absWebmPath)} -vn -ab 128k -ar 44100 -y ${escapePath(absMp3Path)}`;
+                console.log("\u6267\u884C\u547D\u4EE4:", ffmpegCmd);
+                exec(ffmpegCmd, (error, stdout, stderr) => {
+                  if (error) {
+                    console.error(`\u6267\u884C\u51FA\u9519: ${error}`);
+                    loadingEl.setText(`\u8F6C\u6362\u5931\u8D25: ${error.message}`);
+                    new import_obsidian3.Notice(`ffmpeg \u8F6C\u6362\u5931\u8D25: ${error.message}`);
+                    return;
+                  }
+                  new import_obsidian3.Notice("webm \u5DF2\u6210\u529F\u8F6C\u6362\u4E3A mp3");
+                  containerEl.empty();
+                  createAudioPlayer(mp3Path);
+                });
+              } catch (conversionError) {
+                console.error("\u6267\u884C ffmpeg \u5931\u8D25:", conversionError);
+                loadingEl.setText("\u6267\u884C ffmpeg \u5931\u8D25\uFF0C\u8BF7\u786E\u4FDD\u7CFB\u7EDF\u5DF2\u5B89\u88C5 ffmpeg");
+                new import_obsidian3.Notice("\u6267\u884C ffmpeg \u5931\u8D25\uFF0C\u8BF7\u786E\u4FDD\u7CFB\u7EDF\u5DF2\u5B89\u88C5 ffmpeg");
+              }
+            }
+          });
+        } catch (error) {
+          console.error("\u5904\u7406 webm \u6587\u4EF6\u5931\u8D25:", error);
+          new import_obsidian3.Notice("\u5904\u7406 webm \u6587\u4EF6\u5931\u8D25");
+        }
+      } else {
+        createAudioPlayer(link.path);
+      }
     });
+  }
+  async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+  async saveSettings() {
+    await this.saveData(this.settings);
+  }
+};
+var AudioPlayerSettingTab = class extends import_obsidian3.PluginSettingTab {
+  constructor(app, plugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+  display() {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.createEl("h2", { text: "\u97F3\u9891\u64AD\u653E\u5668\u8BBE\u7F6E" });
+    new import_obsidian3.Setting(containerEl).setName("ffmpeg \u8DEF\u5F84").setDesc('\u8BBE\u7F6E ffmpeg \u53EF\u6267\u884C\u6587\u4EF6\u7684\u8DEF\u5F84\u3002\u5982\u679C ffmpeg \u5728\u7CFB\u7EDF PATH \u4E2D\uFF0C\u53EF\u4EE5\u76F4\u63A5\u4F7F\u7528 "ffmpeg"').addText((text) => text.setPlaceholder("ffmpeg").setValue(this.plugin.settings.ffmpegPath).onChange(async (value) => {
+      this.plugin.settings.ffmpegPath = value;
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian3.Setting(containerEl).setName("whisper-cli \u8DEF\u5F84").setDesc('\u8BBE\u7F6E whisper \u547D\u4EE4\u884C\u5DE5\u5177\u7684\u8DEF\u5F84\u3002\u5982\u679C\u5728\u7CFB\u7EDF PATH \u4E2D\uFF0C\u53EF\u4EE5\u76F4\u63A5\u4F7F\u7528 "whisper"').addText((text) => text.setPlaceholder("whisper").setValue(this.plugin.settings.whisperCliPath).onChange(async (value) => {
+      this.plugin.settings.whisperCliPath = value;
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian3.Setting(containerEl).setName("whisper \u6A21\u578B\u8DEF\u5F84").setDesc("\u8BBE\u7F6E whisper \u6A21\u578B\u6587\u4EF6\u7684\u8DEF\u5F84\u3002\u5982\u7559\u7A7A\u5219\u4F7F\u7528\u9ED8\u8BA4\u6A21\u578B").addText((text) => text.setPlaceholder("\u4F8B\u5982: /path/to/model.bin").setValue(this.plugin.settings.whisperModelPath).onChange(async (value) => {
+      this.plugin.settings.whisperModelPath = value;
+      await this.plugin.saveSettings();
+    }));
+    containerEl.createEl("h3", { text: "\u8BED\u97F3\u8F6C\u5F55\u8BBE\u7F6E" });
+    const summaryPromptSetting = new import_obsidian3.Setting(containerEl).setName("\u603B\u7ED3\u63D0\u793A\u8BCD").setDesc("\u8BBE\u7F6E\u7528\u4E8E\u603B\u7ED3\u8BED\u97F3\u8F6C\u5F55\u5185\u5BB9\u7684\u63D0\u793A\u8BCD\uFF0C\u5C06\u7528\u4E8EAI\u751F\u6210\u603B\u7ED3");
+    const textAreaEl = document.createElement("textarea");
+    textAreaEl.value = this.plugin.settings.summaryPrompt;
+    textAreaEl.rows = 6;
+    textAreaEl.cols = 50;
+    textAreaEl.className = "setting-prompt-textarea";
+    textAreaEl.addEventListener("change", async (e) => {
+      this.plugin.settings.summaryPrompt = e.target.value;
+      await this.plugin.saveSettings();
+    });
+    const style = document.createElement("style");
+    style.innerHTML = `
+			.setting-prompt-textarea {
+				width: 100%;
+				min-height: 100px;
+				font-family: var(--font-monospace);
+				resize: vertical;
+				margin-top: 8px;
+			}
+		`;
+    document.head.appendChild(style);
+    summaryPromptSetting.controlEl.appendChild(textAreaEl);
+    containerEl.createEl("h3", { text: "AI \u670D\u52A1\u8BBE\u7F6E" });
+    new import_obsidian3.Setting(containerEl).setName("AI \u63A5\u53E3\u5730\u5740 (Endpoint)").setDesc("\u8BBE\u7F6E AI \u670D\u52A1\u7684\u63A5\u53E3\u5730\u5740").addText((text) => text.setPlaceholder("https://api.openai.com/v1/chat/completions").setValue(this.plugin.settings.aiEndpoint).onChange(async (value) => {
+      this.plugin.settings.aiEndpoint = value;
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian3.Setting(containerEl).setName("AI \u6A21\u578B\u540D\u79F0").setDesc("\u8BBE\u7F6E\u4F7F\u7528\u7684 AI \u6A21\u578B\u540D\u79F0").addText((text) => text.setPlaceholder("gpt-3.5-turbo").setValue(this.plugin.settings.aiModel).onChange(async (value) => {
+      this.plugin.settings.aiModel = value;
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian3.Setting(containerEl).setName("API \u5BC6\u94A5").setDesc("\u8BBE\u7F6E AI \u670D\u52A1\u7684 API \u5BC6\u94A5\uFF08\u5C06\u52A0\u5BC6\u5B58\u50A8\uFF09").addText((text) => text.setPlaceholder("sk-...").setValue(this.plugin.settings.aiApiKey).setDisabled(false).inputEl.type = "password");
+    new import_obsidian3.Setting(containerEl).setName("\u4FDD\u5B58 API \u5BC6\u94A5").setDesc("\u70B9\u51FB\u4FDD\u5B58\u6309\u94AE\u5C06 API \u5BC6\u94A5\u5B58\u50A8\u81F3\u914D\u7F6E").addButton((button) => button.setButtonText("\u4FDD\u5B58 API \u5BC6\u94A5").onClick(async () => {
+      const inputEl = containerEl.querySelector('input[type="password"]');
+      if (inputEl) {
+        this.plugin.settings.aiApiKey = inputEl.value;
+        await this.plugin.saveSettings();
+        new import_obsidian3.Notice("API \u5BC6\u94A5\u5DF2\u4FDD\u5B58");
+      }
+    }));
   }
 };
