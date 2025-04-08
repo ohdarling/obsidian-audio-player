@@ -5,10 +5,10 @@
         <div class="playpause" @click="togglePlay" ref="playpause">
         </div>
         <div class="playpause seconds" @click="setPlayheadSecs(currentTime+5)" ref="add5">
-          &gt;&gt;
+          +5s
         </div>
         <div class="playpause seconds" @click="setPlayheadSecs(currentTime-5)" ref="min5">
-          &lt;&lt;
+          -5s
         </div>
         <div class="playpause seconds" 
              @click="!summarizing && summarizeAudio()" 

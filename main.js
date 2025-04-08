@@ -6906,12 +6906,12 @@ function render2(_ctx, _cache, $props, $setup, $data, $options) {
           class: "playpause seconds",
           onClick: _cache[1] || (_cache[1] = ($event) => _ctx.setPlayheadSecs(_ctx.currentTime + 5)),
           ref: "add5"
-        }, " >> ", 512),
+        }, " +5s ", 512),
         createBaseVNode("div", {
           class: "playpause seconds",
           onClick: _cache[2] || (_cache[2] = ($event) => _ctx.setPlayheadSecs(_ctx.currentTime - 5)),
           ref: "min5"
-        }, " << ", 512),
+        }, " -5s ", 512),
         createBaseVNode("div", {
           class: normalizeClass(["playpause seconds", { "disabled": _ctx.summarizing }]),
           onClick: _cache[3] || (_cache[3] = ($event) => !_ctx.summarizing && _ctx.summarizeAudio()),
@@ -7324,7 +7324,7 @@ var AudioPlayer = class extends import_obsidian3.Plugin {
       if (!this.settings.aiApiKey) {
         throw new Error("\u672A\u914D\u7F6E API \u5BC6\u94A5");
       }
-      const segments = this.splitTextIntoSegments(text, 4e3);
+      const segments = this.splitTextIntoSegments(text, 3e4);
       let summaries = [];
       for (let i = 0; i < segments.length; i++) {
         new import_obsidian3.Notice(`\u6B63\u5728\u603B\u7ED3\u7B2C ${i + 1}/${segments.length} \u90E8\u5206...`);
@@ -7350,7 +7350,8 @@ var AudioPlayer = class extends import_obsidian3.Plugin {
 ${segments[i]}`
               }
             ],
-            temperature: 0.3
+            temperature: 0.5,
+            top_p: 0.7
           })
         };
         const response = await (0, import_obsidian3.requestUrl)(requestParams);
@@ -7362,7 +7363,7 @@ ${segments[i]}`
           throw new Error("API \u54CD\u5E94\u683C\u5F0F\u4E0D\u6B63\u786E");
         }
       }
-      return summaries.join("\n").trim();
+      return summaries.join("\n").trim().split("\n").filter((x) => x.trim() !== "").filter((x) => x.match(/^\d{2}\:\d{2}\:\d{2}/)).join("\n");
     } catch (error) {
       console.error("\u8C03\u7528 AI \u63A5\u53E3\u5931\u8D25:", error);
       throw error;

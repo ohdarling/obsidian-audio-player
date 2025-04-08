@@ -434,8 +434,8 @@ export default class AudioPlayer extends Plugin {
 				throw new Error("未配置 API 密钥");
 			}
 			
-			// 分段处理文本（每次处理约 4000 字）
-			const segments = this.splitTextIntoSegments(text, 4000);
+			// 分段处理文本（每次处理约 30000 字）
+			const segments = this.splitTextIntoSegments(text, 30000);
 			let summaries = [];
 			
 			for (let i = 0; i < segments.length; i++) {
@@ -463,7 +463,8 @@ export default class AudioPlayer extends Plugin {
 								content: `${this.settings.summaryPrompt}\n\n${segments[i]}`
 							}
 						],
-						temperature: 0.3
+						temperature: 0.5,
+						top_p: 0.7,
 					})
 				};
 				
@@ -480,7 +481,7 @@ export default class AudioPlayer extends Plugin {
 			}
 			
 			// 合并所有总结
-			return summaries.join("\n").trim();
+			return summaries.join("\n").trim().split('\n').filter((x) => x.trim() !== '').filter((x) => x.match(/^\d{2}\:\d{2}\:\d{2}/)).join('\n');
 			
 		} catch (error) {
 			console.error("调用 AI 接口失败:", error);
