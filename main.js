@@ -6931,7 +6931,7 @@ function render2(_ctx, _cache, $props, $setup, $data, $options) {
               key: _ctx.srcPath + i,
               onMousedown: ($event) => _ctx.barMouseDownHandler(i),
               style: normalizeStyle({
-                height: s * 100 + "px"
+                height: s * 100 + "%"
               })
             }, null, 46, _hoisted_8);
           }), 128))

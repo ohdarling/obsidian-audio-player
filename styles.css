@@ -33,6 +33,8 @@ If your plugin does not need CSS, delete this file.
 	justify-content: space-between;
 	align-items: baseline;
 	display: flex;
+	height: 100%;
+	position: relative;
 }
 
 .wv {
@@ -98,6 +100,7 @@ If your plugin does not need CSS, delete this file.
 	justify-content: space-between;
 	color: var(--color-base-50);
 	font-size: 0.9rem;
+	margin-bottom: 10px;
 }
 .wide {
 	width: 100%;

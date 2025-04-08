@@ -25,7 +25,7 @@
             v-bind:class="{'played': i <= currentBar }"
             @mousedown="barMouseDownHandler(i)"
             :style="{
-              height: s * 100 + 'px'
+              height: s * 100 + '%'
             }">
           </div>
         </div>
