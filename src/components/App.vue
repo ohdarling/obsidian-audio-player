@@ -10,8 +10,13 @@
         <div class="playpause seconds" @click="setPlayheadSecs(currentTime-5)" ref="min5">
           &lt;&lt;
         </div>
-        <div class="playpause seconds" @click="summarizeAudio" ref="summarize" title="使用 AI 总结音频内容">
-          AI
+        <div class="playpause seconds" 
+             @click="!summarizing && summarizeAudio()" 
+             ref="summarize" 
+             title="使用 AI 总结音频内容"
+             :class="{'disabled': summarizing}">
+          <span v-if="!summarizing">AI</span>
+          <span v-else class="loading-spinner"></span>
         </div>
       </div>
       <div class="vert wide">
@@ -101,6 +106,7 @@ export default defineComponent({
 
       ro: ResizeObserver,
       smallSize: false,
+      summarizing: false
     }
   },
   computed: {
@@ -268,7 +274,7 @@ export default defineComponent({
       const lines = sectionInfo.text.split('\n') as string[];
       const cmtLines = lines.slice(sectionInfo.lineStart + 2, sectionInfo.lineEnd);
 
-      const cmts = cmtLines.map((x, i) => {
+      const cmts = cmtLines.filter((x) => x.trim() !== '').map((x, i) => {
         const split = x.split(' --- ');
         const timeStamp = secondsToNumber(split[0]);
         const cmt: AudioComment = {
@@ -284,8 +290,13 @@ export default defineComponent({
     // 总结音频内容
     async summarizeAudio() {
       try {
+        if (this.summarizing) return; // 防止重复点击
+        
+        this.summarizing = true; // 设置状态为处理中
+        
         if (!this.plugin) {
           new Notice('无法获取插件实例');
+          this.summarizing = false;
           return;
         }
         
@@ -295,13 +306,15 @@ export default defineComponent({
         
         if (!file) {
           new Notice('找不到当前播放的音频文件');
+          this.summarizing = false;
           return;
         }
         
         // 调用插件的总结方法
         const summary = await (this.plugin as any).summarizeAudio(file);
-
+        console.log('summary', summary);
         const sectionInfo = this.getSectionInfo();
+        console.log('sectionInfo', sectionInfo);
         const lines = sectionInfo.text.split('\n') as string[];
         lines.splice(sectionInfo.lineEnd, 0, summary);
         window.app.vault.adapter.write(this.ctx.sourcePath, lines.join('\n'))
@@ -309,6 +322,8 @@ export default defineComponent({
       } catch (error) {
         console.error('总结音频失败:', error);
         new Notice(`总结音频失败: ${error.message || error}`);
+      } finally {
+        this.summarizing = false; // 无论成功还是失败，都重置状态
       }
     },
   },
@@ -362,3 +377,24 @@ export default defineComponent({
 })
 
 </script>
+
+<style>
+.disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+</style>

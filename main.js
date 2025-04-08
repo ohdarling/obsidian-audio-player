@@ -6608,7 +6608,8 @@ var App_default = defineComponent({
       comments: [],
       activeComment: null,
       ro: ResizeObserver,
-      smallSize: false
+      smallSize: false,
+      summarizing: false
     };
   },
   computed: {
@@ -6778,7 +6779,7 @@ var App_default = defineComponent({
       const sectionInfo = this.getSectionInfo();
       const lines = sectionInfo.text.split("\n");
       const cmtLines = lines.slice(sectionInfo.lineStart + 2, sectionInfo.lineEnd);
-      const cmts = cmtLines.map((x, i) => {
+      const cmts = cmtLines.filter((x) => x.trim() !== "").map((x, i) => {
         const split = x.split(" --- ");
         const timeStamp = secondsToNumber(split[0]);
         const cmt = {
@@ -6793,24 +6794,33 @@ var App_default = defineComponent({
     },
     async summarizeAudio() {
       try {
+        if (this.summarizing)
+          return;
+        this.summarizing = true;
         if (!this.plugin) {
           new import_obsidian.Notice("\u65E0\u6CD5\u83B7\u53D6\u63D2\u4EF6\u5B9E\u4F8B");
+          this.summarizing = false;
           return;
         }
         const vault = this.plugin.app.vault;
         const file = vault.getAbstractFileByPath(this.filepath);
         if (!file) {
           new import_obsidian.Notice("\u627E\u4E0D\u5230\u5F53\u524D\u64AD\u653E\u7684\u97F3\u9891\u6587\u4EF6");
+          this.summarizing = false;
           return;
         }
         const summary = await this.plugin.summarizeAudio(file);
+        console.log("summary", summary);
         const sectionInfo = this.getSectionInfo();
+        console.log("sectionInfo", sectionInfo);
         const lines = sectionInfo.text.split("\n");
         lines.splice(sectionInfo.lineEnd, 0, summary);
         window.app.vault.adapter.write(this.ctx.sourcePath, lines.join("\n"));
       } catch (error) {
         console.error("\u603B\u7ED3\u97F3\u9891\u5931\u8D25:", error);
         new import_obsidian.Notice(`\u603B\u7ED3\u97F3\u9891\u5931\u8D25: ${error.message || error}`);
+      } finally {
+        this.summarizing = false;
       }
     }
   },
@@ -6862,21 +6872,26 @@ var _hoisted_12 = {
 };
 var _hoisted_22 = { class: "horiz" };
 var _hoisted_3 = { class: "vert" };
-var _hoisted_4 = { class: "vert wide" };
-var _hoisted_5 = { class: "waveform" };
-var _hoisted_6 = ["onMousedown"];
-var _hoisted_7 = { class: "timeline" };
-var _hoisted_8 = { class: "current-time" };
-var _hoisted_9 = { class: "duration" };
-var _hoisted_10 = {
+var _hoisted_4 = { key: 0 };
+var _hoisted_5 = {
+  key: 1,
+  class: "loading-spinner"
+};
+var _hoisted_6 = { class: "vert wide" };
+var _hoisted_7 = { class: "waveform" };
+var _hoisted_8 = ["onMousedown"];
+var _hoisted_9 = { class: "timeline" };
+var _hoisted_10 = { class: "current-time" };
+var _hoisted_11 = { class: "duration" };
+var _hoisted_122 = {
   class: "horiz",
   style: { "margin": "auto" }
 };
-var _hoisted_11 = {
+var _hoisted_13 = {
   key: 0,
   class: "comment-input"
 };
-var _hoisted_122 = { class: "comment-list" };
+var _hoisted_14 = { class: "comment-list" };
 function render2(_ctx, _cache, $props, $setup, $data, $options) {
   const _component_AudioCommentVue = resolveComponent("AudioCommentVue");
   return openBlock(), createElementBlock("div", _hoisted_12, [
@@ -6898,16 +6913,18 @@ function render2(_ctx, _cache, $props, $setup, $data, $options) {
           ref: "min5"
         }, " << ", 512),
         createBaseVNode("div", {
-          class: "playpause seconds",
-          onClick: _cache[3] || (_cache[3] = (...args) => _ctx.summarizeAudio && _ctx.summarizeAudio(...args)),
+          class: normalizeClass(["playpause seconds", { "disabled": _ctx.summarizing }]),
+          onClick: _cache[3] || (_cache[3] = ($event) => !_ctx.summarizing && _ctx.summarizeAudio()),
           ref: "summarize",
           title: "\u4F7F\u7528 AI \u603B\u7ED3\u97F3\u9891\u5185\u5BB9"
-        }, " AI ", 512)
+        }, [
+          !_ctx.summarizing ? (openBlock(), createElementBlock("span", _hoisted_4, "AI")) : (openBlock(), createElementBlock("span", _hoisted_5))
+        ], 2)
       ], 512), [
         [vShow, !_ctx.smallSize]
       ]),
-      createBaseVNode("div", _hoisted_4, [
-        createBaseVNode("div", _hoisted_5, [
+      createBaseVNode("div", _hoisted_6, [
+        createBaseVNode("div", _hoisted_7, [
           (openBlock(true), createElementBlock(Fragment, null, renderList(_ctx.filteredData, (s, i) => {
             return openBlock(), createElementBlock("div", {
               class: normalizeClass(["wv", { "played": i <= _ctx.currentBar }]),
@@ -6916,16 +6933,16 @@ function render2(_ctx, _cache, $props, $setup, $data, $options) {
               style: normalizeStyle({
                 height: s * 100 + "px"
               })
-            }, null, 46, _hoisted_6);
+            }, null, 46, _hoisted_8);
           }), 128))
         ]),
-        createBaseVNode("div", _hoisted_7, [
-          createBaseVNode("span", _hoisted_8, toDisplayString(_ctx.displayedCurrentTime), 1),
-          createBaseVNode("span", _hoisted_9, toDisplayString(_ctx.displayedDuration), 1)
+        createBaseVNode("div", _hoisted_9, [
+          createBaseVNode("span", _hoisted_10, toDisplayString(_ctx.displayedCurrentTime), 1),
+          createBaseVNode("span", _hoisted_11, toDisplayString(_ctx.displayedDuration), 1)
         ])
       ])
     ]),
-    withDirectives(createBaseVNode("div", _hoisted_10, [
+    withDirectives(createBaseVNode("div", _hoisted_122, [
       createBaseVNode("div", {
         class: "playpause seconds",
         onClick: _cache[4] || (_cache[4] = ($event) => _ctx.setPlayheadSecs(_ctx.currentTime - 5)),
@@ -6944,7 +6961,7 @@ function render2(_ctx, _cache, $props, $setup, $data, $options) {
     ], 512), [
       [vShow, _ctx.smallSize]
     ]),
-    _ctx.showInput ? (openBlock(), createElementBlock("div", _hoisted_11, [
+    _ctx.showInput ? (openBlock(), createElementBlock("div", _hoisted_13, [
       withDirectives(createBaseVNode("input", {
         "onUpdate:modelValue": _cache[7] || (_cache[7] = ($event) => _ctx.newComment = $event),
         onKeydown: [
@@ -6969,7 +6986,7 @@ function render2(_ctx, _cache, $props, $setup, $data, $options) {
         })
       }, "Cancel")
     ])) : createCommentVNode("v-if", true),
-    createBaseVNode("div", _hoisted_122, [
+    createBaseVNode("div", _hoisted_14, [
       (openBlock(true), createElementBlock(Fragment, null, renderList(_ctx.commentsSorted, (cmt) => {
         return openBlock(), createBlock(_component_AudioCommentVue, {
           class: normalizeClass({ "active-comment": cmt == _ctx.activeComment }),
@@ -7193,10 +7210,19 @@ var AudioPlayer = class extends import_obsidian3.Plugin {
         }
         audioFilePath = mp3Path;
       }
-      const transcription = await this.transcribeAudio(audioFilePath);
-      if (!transcription) {
-        new import_obsidian3.Notice("\u8F6C\u5F55\u97F3\u9891\u5931\u8D25");
-        return "";
+      const transcriptionPath = audioFilePath.replace(/\.[^.]+$/, "-transcription.srt");
+      const transcriptionExists = await this.app.vault.adapter.exists(transcriptionPath);
+      let transcription = "";
+      if (transcriptionExists) {
+        new import_obsidian3.Notice("\u8F6C\u5F55\u6587\u4EF6\u5DF2\u5B58\u5728\uFF0C\u76F4\u63A5\u4F7F\u7528");
+        const transcriptionFile = this.app.vault.getAbstractFileByPath(transcriptionPath);
+        transcription = await this.app.vault.read(transcriptionFile);
+      } else {
+        transcription = await this.transcribeAudio(audioFilePath);
+        if (!transcription) {
+          new import_obsidian3.Notice("\u8F6C\u5F55\u97F3\u9891\u5931\u8D25");
+          return "";
+        }
       }
       const summary = await this.summarizeText(transcription);
       if (!summary) {
@@ -7261,6 +7287,12 @@ var AudioPlayer = class extends import_obsidian3.Plugin {
         const absAudioPath = path.resolve(vaultBasePath, audioPath);
         const outputPath = path.resolve(vaultBasePath, audioPath.replace(/\.[^.]+$/, "-transcription"));
         const outputFormat = "srt";
+        const transcriptionFilePath = path.resolve(outputPath + "." + outputFormat);
+        if (fs.existsSync(transcriptionFilePath)) {
+          const transcription = fs.readFileSync(transcriptionFilePath, "utf8");
+          resolve2(transcription);
+          return;
+        }
         let whisperCmd = `${this.settings.whisperCliPath} -l zh --output-${outputFormat} --output-file "${outputPath}"`;
         if (this.settings.whisperModelPath) {
           whisperCmd += ` --model "${this.settings.whisperModelPath}" `;
@@ -7274,7 +7306,6 @@ var AudioPlayer = class extends import_obsidian3.Plugin {
             reject(error);
             return;
           }
-          const transcriptionFilePath = path.resolve(outputPath + "." + outputFormat);
           if (fs.existsSync(transcriptionFilePath)) {
             const transcription = fs.readFileSync(transcriptionFilePath, "utf8");
             resolve2(transcription);
@@ -7331,7 +7362,7 @@ ${segments[i]}`
           throw new Error("API \u54CD\u5E94\u683C\u5F0F\u4E0D\u6B63\u786E");
         }
       }
-      return summaries.join("\n");
+      return summaries.join("\n").trim();
     } catch (error) {
       console.error("\u8C03\u7528 AI \u63A5\u53E3\u5931\u8D25:", error);
       throw error;

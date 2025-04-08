@@ -276,18 +276,30 @@ export default class AudioPlayer extends Plugin {
 				audioFilePath = mp3Path;
 			}
 			
-			// 2. 使用 whisper 转换为文本
-			const transcription = await this.transcribeAudio(audioFilePath);
-			if (!transcription) {
-				new Notice("转录音频失败");
-				return '';
+			// 2. 检查转录文件是否已存在
+			const transcriptionPath = audioFilePath.replace(/\.[^.]+$/, "-transcription.srt");
+			const transcriptionExists = await this.app.vault.adapter.exists(transcriptionPath);
+			
+			let transcription = "";
+			if (transcriptionExists) {
+				// 如果转录文件已存在，直接读取
+				new Notice("转录文件已存在，直接使用");
+				const transcriptionFile = this.app.vault.getAbstractFileByPath(transcriptionPath) as TFile;
+				transcription = await this.app.vault.read(transcriptionFile);
+			} else {
+				// 如果转录文件不存在，则使用 whisper 转换为文本
+				transcription = await this.transcribeAudio(audioFilePath);
+				if (!transcription) {
+					new Notice("转录音频失败");
+					return "";
+				}
 			}
 			
 			// 3. 调用 AI 接口进行总结
 			const summary = await this.summarizeText(transcription);
 			if (!summary) {
 				new Notice("总结失败");
-				return '';
+				return "";
 			}
 			
 			// 4. 保存结果到文件
@@ -295,13 +307,11 @@ export default class AudioPlayer extends Plugin {
 			await this.saveToFile(summaryPath, summary);
 			
 			new Notice(`总结完成，已保存到 ${summaryPath}`);
-
-			// 5. 在 sourcePath 文件中插入 summaryPath 文件内容
-			return summary
+			return summary;
 		} catch (error) {
 			console.error("总结音频时出错:", error);
 			new Notice(`总结失败: ${error.message || error}`);
-			return '';
+			return "";
 		}
 	}
 	
@@ -375,6 +385,12 @@ export default class AudioPlayer extends Plugin {
 				const absAudioPath = path.resolve(vaultBasePath, audioPath);
 				const outputPath = path.resolve(vaultBasePath, audioPath.replace(/\.[^.]+$/, "-transcription"));
 				const outputFormat = 'srt';
+				const transcriptionFilePath = path.resolve(outputPath + "." + outputFormat);
+				if (fs.existsSync(transcriptionFilePath)) {
+					const transcription = fs.readFileSync(transcriptionFilePath, 'utf8');
+					resolve(transcription);
+					return;
+				}
 				
 				// 构建 whisper 命令
 				let whisperCmd = `${this.settings.whisperCliPath} -l zh --output-${outputFormat} --output-file "${outputPath}"`;
@@ -397,8 +413,6 @@ export default class AudioPlayer extends Plugin {
 					}
 					
 					// 读取生成的转录文件
-					const transcriptionFilePath = path.resolve(outputPath + "." + outputFormat);
-					
 					if (fs.existsSync(transcriptionFilePath)) {
 						const transcription = fs.readFileSync(transcriptionFilePath, 'utf8');
 						resolve(transcription);
@@ -466,7 +480,7 @@ export default class AudioPlayer extends Plugin {
 			}
 			
 			// 合并所有总结
-			return summaries.join("\n");
+			return summaries.join("\n").trim();
 			
 		} catch (error) {
 			console.error("调用 AI 接口失败:", error);
