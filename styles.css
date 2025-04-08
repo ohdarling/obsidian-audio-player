@@ -119,6 +119,10 @@ If your plugin does not need CSS, delete this file.
 	padding-right: 4px;
 }
 
+.comment .timestamp {
+	font-family: monospace;
+}
+
 .comment:hover {
 	background-color: var(--background-modifier-cover);
 }
